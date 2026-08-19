@@ -152,7 +152,7 @@ const T = {
     "Внешняя политика России после 1991 года",
     "Россия и формирование многополярного мира",
     "Российско-китайское стратегическое партнёрство",
-    "Россия и изменение европейной системы безопасности",
+    "Россия и изменение европейной система безопасности",
     "Россия в международных организациях",
     "Россия и страны Центральной Азии",
     "Российская политика в Арктике",
@@ -267,7 +267,12 @@ const guideBox = document.getElementById('guideBox');
 // Используем sessionStorage: ключ used::<category> -> JSON array of used indexes
 
 function init() {
-  // заполнить список категорий
+  // добавить опцию "Все направления" и затем список категорий
+  const allOpt = document.createElement('option');
+  allOpt.value = 'ALL';
+  allOpt.textContent = 'Все направления';
+  catEl.appendChild(allOpt);
+
   Object.keys(T).forEach((k, i) => {
     const opt = document.createElement('option');
     opt.value = k;
@@ -294,6 +299,31 @@ function setUsedIndexes(cat, arr){
 }
 
 function pickRandomTopic(cat){
+  if(cat === 'ALL'){
+    // собрать все доступные (неиспользованные) темы со всех категорий
+    const entries = [];
+    Object.keys(T).forEach(k=>{
+      const list = T[k] || [];
+      const used = getUsedIndexes(k);
+      for(let i=0;i<list.length;i++){
+        if(!used.includes(i)) entries.push({cat:k, idx:i, topic:list[i]});
+      }
+    });
+    const total = Object.values(T).reduce((s,a)=>s+a.length,0);
+    if(entries.length === 0){
+      // все использованы — сброс для всех категорий
+      Object.keys(T).forEach(k=> setUsedIndexes(k, []));
+      return {topic: null, exhausted: true, remaining: 0, total};
+    }
+    const pick = entries[Math.floor(Math.random()*entries.length)];
+    // пометить выбранную тему как использованную в её категории
+    const usedArr = getUsedIndexes(pick.cat);
+    usedArr.push(pick.idx);
+    setUsedIndexes(pick.cat, usedArr);
+    const usedTotal = Object.keys(T).reduce((sum,k)=> sum + getUsedIndexes(k).length,0);
+    return {topic: pick.topic, idx: pick.idx, cat: pick.cat, exhausted:false, remaining: total - usedTotal, total};
+  }
+
   const list = T[cat] || [];
   if(!list.length) return null;
   const used = getUsedIndexes(cat);
@@ -312,9 +342,8 @@ function pickRandomTopic(cat){
 }
 
 function animateRoll(finalText){
-  // Простая анимация: показываем несколько случайных тем из категории
   const cat = catEl.value;
-  const list = T[cat] || [];
+  const list = cat === 'ALL' ? Object.values(T).flat() : (T[cat] || []);
   let ticks = 12;
   const interval = 60;
   const timer = setInterval(()=>{
@@ -330,6 +359,12 @@ function animateRoll(finalText){
 
 function updateStats(){
   const cat = catEl.value || Object.keys(T)[0];
+  if(cat === 'ALL'){
+    const total = Object.values(T).reduce((s,a)=> s+a.length,0);
+    const used = Object.keys(T).reduce((sum,k)=> sum + getUsedIndexes(k).length,0);
+    statsEl.textContent = `Категория: Все направления · Использовано: ${used} / ${total}`;
+    return;
+  }
   const total = (T[cat] || []).length;
   const used = getUsedIndexes(cat).length;
   statsEl.textContent = `Категория: ${cat} · Использовано: ${used} / ${total}`;
@@ -340,17 +375,17 @@ goBtn.addEventListener('click', ()=>{
   if(!cat){ topicEl.textContent = 'Выберите направление'; return; }
   goBtn.disabled = true;
   const result = pickRandomTopic(cat);
-  if(result.exhausted){
+  if(result && result.exhausted){
     topicEl.textContent = 'Все темы в этой категории были показаны. Список сброшен — нажмите ещё раз.';
     updateStats();
     goBtn.disabled = false;
     return;
   }
   // анимированно показать
-  animateRoll(result.topic);
+  animateRoll(result ? result.topic : null);
   // небольшая задержка чтобы дать анимации завершиться
   setTimeout(()=>{
-    topicEl.textContent = result.topic;
+    topicEl.textContent = result ? result.topic : '...';
     metaEl.textContent = '';
     updateStats();
     goBtn.disabled = false;
